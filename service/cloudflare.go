@@ -56,7 +56,8 @@ func NewCloudflareServiceWithZone(apiToken, zoneID string) (*CloudflareService, 
 	}, nil
 }
 
-// UpdateSecurityLevel mengubah security level zone menjadi "under_attack" jika mode "on" atau mengembalikannya ke "high" jika mode "off".
+// UpdateSecurityLevel mengubah security level zone menjadi "under_attack" jika mode "on"
+// atau mengembalikannya ke "high" jika mode "off".
 func (c *CloudflareService) UpdateSecurityLevel(mode string) error {
 	var secLevel string
 	switch mode {
@@ -69,10 +70,18 @@ func (c *CloudflareService) UpdateSecurityLevel(mode string) error {
 	}
 
 	ctx := context.Background()
-	// Menggunakan UpdateZoneSecurityLevel untuk mengubah security level.
-	updated, err := c.api.UpdateZoneSecurityLevel(ctx, c.zoneID, secLevel)
+	// Buat resource container dengan menggunakan field Identifier
+	rc := &cloudflare.ResourceContainer{
+		Identifier: c.zoneID,
+	}
+	// Buat parameter update dengan nilai security level baru
+	params := cloudflare.UpdateZoneSettingParams{
+		Value: secLevel,
+	}
+
+	updated, err := c.api.UpdateZoneSetting(ctx, rc, params)
 	if err != nil {
-		return fmt.Errorf("error updating zone security level: %v", err)
+		return fmt.Errorf("error updating zone setting: %v", err)
 	}
 
 	fmt.Printf("Cloudflare zone %s updated security level to: %v\n", c.zoneID, updated)
