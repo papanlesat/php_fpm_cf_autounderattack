@@ -14,7 +14,7 @@ This project is a Go-based tool that monitors the CPU usage of php-fpm processes
 - Supports mapping different users to different Cloudflare Zone IDs.
 
 ### Email Alert
-- Supports email alert.
+- Support email alert.
 
 ## Requirements
 
