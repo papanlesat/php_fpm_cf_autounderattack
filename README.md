@@ -35,7 +35,28 @@ This project is a Go-based tool that monitors the CPU usage of php-fpm processes
 git clone https://github.com/papanlesat/php_fpm_cf_autounderattack.git cf_underattack
 cd cf_underattack
 ```
+### Check user via ps
 
+```bash
+ps -eo user,pcpu,comm | grep php-fpm | awk '{cpu[$1]+=$2} END {for (u in cpu) print u, cpu[u] "%"}'
+```
+
+- example results:
+
+- root 0%
+- kedaipe+ 22.3%
+- lensain+ 27.9%
+
+adjust lensain+ & kedaipe+ in userZoneMapping map
+
+```go
+	// Mapping of users to their Cloudflare Zone IDs.
+	userZoneMapping := map[string]string{
+		"lensain+": os.Getenv("CF_ZONE_LENSAIN"),
+		"kedaipe+": os.Getenv("CF_ZONE_KEDAIPE"),
+		// Add more mappings as needed.
+	}
+```
 ### Initialize the Go Module and Download Dependencies
 
 ```bash
