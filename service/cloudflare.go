@@ -69,18 +69,12 @@ func (c *CloudflareService) UpdateSecurityLevel(mode string) error {
 	}
 
 	ctx := context.Background()
-	// Membuat resource container dengan zone ID.
-	rc := &cloudflare.ResourceContainer{Identifier: c.zoneID}
-	// Parameter update hanya memerlukan nilai baru.
-	params := cloudflare.UpdateZoneSettingParams{
-		Value: secLevel,
-	}
-
-	updated, err := c.api.UpdateZoneSetting(ctx, rc, params)
+	// Menggunakan UpdateZoneSecurityLevel untuk mengubah security level.
+	updated, err := c.api.UpdateZoneSecurityLevel(ctx, c.zoneID, secLevel)
 	if err != nil {
-		return fmt.Errorf("error updating zone setting: %v", err)
+		return fmt.Errorf("error updating zone security level: %v", err)
 	}
 
-	fmt.Printf("Cloudflare zone %s updated security level to: %s\n", c.zoneID, updated.Value)
+	fmt.Printf("Cloudflare zone %s updated security level to: %v\n", c.zoneID, updated)
 	return nil
 }
