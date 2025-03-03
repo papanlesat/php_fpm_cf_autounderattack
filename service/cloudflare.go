@@ -2,40 +2,37 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v3"
+	"github.com/cloudflare/cloudflare-go/v3/option"
+	"github.com/cloudflare/cloudflare-go/v3/zones"
 )
 
-// CloudflareService wraps the Cloudflare API client and zone configuration.
+// CloudflareService wraps the Cloudflare v3 client and the zone ID.
 type CloudflareService struct {
-	api    *cloudflare.API
+	client *cloudflare.Client
 	zoneID string
 }
 
-// NewCloudflareServiceWithZoneGlobal creates a new CloudflareService instance using
-// the Global API Key and Email (from environment variables CF_API_KEY and CF_EMAIL)
-// and the provided zone ID.
+// NewCloudflareServiceWithZoneGlobal creates a new CloudflareService instance using the Global API Key.
+// It reads CF_API_KEY and CF_EMAIL from the environment.
 func NewCloudflareServiceWithZoneGlobal(zoneID string) (*CloudflareService, error) {
 	apiKey := os.Getenv("CF_API_KEY")
 	email := os.Getenv("CF_EMAIL")
-	if apiKey == "" {
-		return nil, errors.New("CF_API_KEY environment variable is not set")
+	if apiKey == "" || email == "" {
+		return nil, fmt.Errorf("CF_API_KEY or CF_EMAIL environment variable is not set")
 	}
-	if email == "" {
-		return nil, errors.New("CF_EMAIL environment variable is not set")
-	}
-	if zoneID == "" {
-		return nil, errors.New("zoneID cannot be empty")
-	}
-	api, err := cloudflare.New(apiKey, email)
-	if err != nil {
-		return nil, fmt.Errorf("error creating Cloudflare client: %v", err)
-	}
+
+	// Create the v3 client using API key and email.
+	client := cloudflare.NewClient(
+		option.WithAPIKey(apiKey),
+		option.WithAPIEmail(email),
+	)
+
 	return &CloudflareService{
-		api:    api,
+		client: client,
 		zoneID: zoneID,
 	}, nil
 }
@@ -43,55 +40,53 @@ func NewCloudflareServiceWithZoneGlobal(zoneID string) (*CloudflareService, erro
 // UpdateSecurityLevel updates the zone's security level.
 // If mode is "on", it sets the level to "under_attack".
 // If mode is "off", it sets the level to "high".
+
 func (c *CloudflareService) UpdateSecurityLevel(mode string) error {
-	var secLevel string
+	var body zones.SecurityLevelParam
 	switch mode {
 	case "on":
-		secLevel = "under_attack"
+		body = zones.SecurityLevelParam{
+			ID:    cloudflare.F(zones.SecurityLevelIDSecurityLevel),
+			Value: cloudflare.F(zones.SecurityLevelValueUnderAttack),
+		}
 	case "off":
-		secLevel = "high"
+		body = zones.SecurityLevelParam{
+			ID:    cloudflare.F(zones.SecurityLevelIDSecurityLevel),
+			Value: cloudflare.F(zones.SecurityLevelValueMedium),
+		}
 	default:
 		return fmt.Errorf("invalid mode: use 'on' or 'off'")
 	}
 
 	ctx := context.Background()
-	// Create a zone-level resource container by specifying the Type as "zone" and providing the zone ID.
-	rc := &cloudflare.ResourceContainer{
-		Type:       "zone",
-		Identifier: c.zoneID,
+	params := zones.SettingEditParams{
+		ZoneID: cloudflare.F(c.zoneID),
+		Body:   body,
 	}
 
-	// Build the update parameters.
-	params := cloudflare.UpdateZoneSettingParams{
-		Value: secLevel,
-	}
-
-	updated, err := c.api.UpdateZoneSetting(ctx, rc, params)
+	resp, err := c.client.Zones.Settings.Edit(ctx, "security_level", params)
 	if err != nil {
 		return fmt.Errorf("error updating zone setting: %v", err)
 	}
 
-	fmt.Printf("Cloudflare zone %s updated security level to: %v\n", c.zoneID, updated)
+	fmt.Printf("Cloudflare zone %s updated security level to: %+v\n", c.zoneID, resp)
 	return nil
 }
 
-// GetSecurityLevel retrieves the current security level from the zone settings.
+// GetSecurityLevel retrieves the current security level from the zone.
 func (c *CloudflareService) GetSecurityLevel() (string, error) {
 	ctx := context.Background()
-	resp, err := c.api.ZoneSettings(ctx, c.zoneID)
+	setting, err := c.client.Zones.Settings.Get(ctx, "security_level", zones.SettingGetParams{
+		ZoneID: cloudflare.F(c.zoneID),
+	})
 	if err != nil {
 		return "", fmt.Errorf("error retrieving zone settings: %v", err)
 	}
 
-	// Iterate over the Result slice to find the "security_level" setting.
-	for _, s := range resp.Result {
-		if s.ID == "security_level" {
-			level, ok := s.Value.(string)
-			if !ok {
-				return "", fmt.Errorf("security_level value is not a string")
-			}
-			return level, nil
-		}
+	// Try to assert to zones.SecurityLevelValue instead of string.
+	if level, ok := setting.Value.(zones.SecurityLevelValue); ok {
+		return string(level), nil
 	}
-	return "", fmt.Errorf("security_level setting not found")
+
+	return "", fmt.Errorf("unexpected type for security level: %T", setting.Value)
 }

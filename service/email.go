@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// EmailConfig menyimpan konfigurasi untuk pengiriman email.
+// EmailConfig holds the configuration for sending email notifications.
 type EmailConfig struct {
 	SMTPServer   string
 	SMTPPort     string
@@ -15,7 +15,7 @@ type EmailConfig struct {
 	Recipient    string
 }
 
-// LoadEmailConfig memuat konfigurasi email dari variabel lingkungan.
+// LoadEmailConfig loads email configuration from environment variables.
 func LoadEmailConfig() (*EmailConfig, error) {
 	server := os.Getenv("SMTP_SERVER")
 	port := os.Getenv("SMTP_PORT")
@@ -23,7 +23,7 @@ func LoadEmailConfig() (*EmailConfig, error) {
 	password := os.Getenv("SMTP_PASSWORD")
 	recipient := os.Getenv("ALERT_EMAIL")
 	if server == "" || port == "" || username == "" || password == "" || recipient == "" {
-		return nil, fmt.Errorf("konfigurasi email tidak lengkap, periksa SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, ALERT_EMAIL")
+		return nil, fmt.Errorf("email configuration incomplete; ensure SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, ALERT_EMAIL are set")
 	}
 	return &EmailConfig{
 		SMTPServer:   server,
@@ -34,7 +34,7 @@ func LoadEmailConfig() (*EmailConfig, error) {
 	}, nil
 }
 
-// SendNotification mengirimkan notifikasi email ketika mode berubah.
+// SendNotification sends an email notification when the mode changes.
 func (config *EmailConfig) SendNotification(user, zoneID, mode string, cpuUsage float64) error {
 	var subject string
 	if mode == "on" {
@@ -44,11 +44,10 @@ func (config *EmailConfig) SendNotification(user, zoneID, mode string, cpuUsage 
 	}
 
 	body := fmt.Sprintf(
-		"Notifikasi perubahan mode:\n\nUser: %s\nZone: %s\nCPU Usage: %.2f%%\nAction: %s",
+		"Notification:\n\nUser: %s\nZone: %s\nCPU Usage: %.2f%%\nAction: %s",
 		user, zoneID, cpuUsage, subject,
 	)
 
-	// Susun pesan email.
 	msg := "From: " + config.SMTPUsername + "\n" +
 		"To: " + config.Recipient + "\n" +
 		"Subject: " + subject + "\n\n" +
@@ -57,10 +56,8 @@ func (config *EmailConfig) SendNotification(user, zoneID, mode string, cpuUsage 
 	auth := smtp.PlainAuth("", config.SMTPUsername, config.SMTPPassword, config.SMTPServer)
 	addr := fmt.Sprintf("%s:%s", config.SMTPServer, config.SMTPPort)
 
-	// Kirim email.
-	err := smtp.SendMail(addr, auth, config.SMTPUsername, []string{config.Recipient}, []byte(msg))
-	if err != nil {
-		return fmt.Errorf("gagal mengirim email: %v", err)
+	if err := smtp.SendMail(addr, auth, config.SMTPUsername, []string{config.Recipient}, []byte(msg)); err != nil {
+		return fmt.Errorf("failed to send email: %v", err)
 	}
 	return nil
 }
