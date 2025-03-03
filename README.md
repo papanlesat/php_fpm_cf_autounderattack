@@ -44,12 +44,21 @@ go mod tidy
 Create a `.env` file at `~/.config/cf/.env` with the following content (update with your own values):
 
 ```dotenv
-# Cloudflare API token
-CF_API_TOKEN=your_cloudflare_api_token
+# Global API Key credentials
+CF_API_KEY=your_global_api_key
+CF_EMAIL=your_email@example.com
 
-# Cloudflare Zone IDs mapped per user
+# Zone IDs per user
 CF_ZONE_LENSAIN=sdsdsd
 CF_ZONE_KEDAIPE=sdee
+
+# SMTP configuration for email notifications
+SMTP_SERVER=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your_smtp_username@example.com
+SMTP_PASSWORD=your_smtp_password
+ALERT_EMAIL=alert_recipient@example.com
+
 ```
 
 You can add more environment variables for additional user-zone mappings as needed.

@@ -12,66 +12,97 @@ import (
 )
 
 func main() {
-	// Dapatkan direktori home user
+	// Load configuration from ~/.config/cf/.env
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("Gagal mendapatkan direktori home: %v", err)
 	}
-	// Bangun path ke file .env di ~/.config/cf/.env
 	envPath := filepath.Join(homeDir, ".config", "cf", ".env")
-	// Muat file .env dari path tersebut
 	if err := godotenv.Load(envPath); err != nil {
 		log.Printf("Tidak dapat memuat file .env dari %s: %v", envPath, err)
 	} else {
 		log.Printf("Berhasil memuat file .env dari %s", envPath)
 	}
 
-	// Threshold penggunaan CPU (dalam persen)
+	// Load email configuration (jika tersedia)
+	emailConfig, err := service.LoadEmailConfig()
+	if err != nil {
+		log.Printf("Konfigurasi email tidak lengkap: %v. Notifikasi email tidak akan dikirim.", err)
+		// Jika tidak tersedia, emailConfig tetap nil
+	}
+
+	// Set the CPU usage threshold (in percentage)
 	const cpuThreshold = 40.0
 
-	// Mapping user ke Cloudflare Zone ID.
-	// Pastikan environment variable untuk masing-masing user sudah di-set, misalnya:
-	// CF_ZONE_LENSAIN=sdsdsd
-	// CF_ZONE_KEDAIPE=sdee
+	// Mapping of users to their Cloudflare Zone IDs.
 	userZoneMapping := map[string]string{
 		"lensain+": os.Getenv("CF_ZONE_LENSAIN"),
 		"kedaipe+": os.Getenv("CF_ZONE_KEDAIPE"),
+		// Tambahkan mapping lain sesuai kebutuhan.
 	}
 
-	// Dapatkan CF_API_TOKEN dari environment.
-	apiToken := os.Getenv("CF_API_TOKEN")
-	if apiToken == "" {
-		log.Fatal("CF_API_TOKEN belum di-set")
-	}
-
-	// Periksa penggunaan CPU php-fpm per user.
+	// Retrieve CPU usage for php-fpm per user.
 	cpuUsage, err := service.CheckFpmCPU()
 	if err != nil {
 		log.Fatalf("Gagal mengecek penggunaan CPU php-fpm: %v", err)
 	}
 
-	// Iterasi setiap user dan periksa apakah penggunaan CPU melebihi threshold.
+	// Iterate over the CPU usage data for each user.
 	for user, usage := range cpuUsage {
 		fmt.Printf("User: %s, CPU: %.2f%%\n", user, usage)
+		zoneID, ok := userZoneMapping[user]
+		if !ok || zoneID == "" {
+			fmt.Printf("Mapping Cloudflare zone tidak ditemukan untuk user %s\n", user)
+			continue
+		}
+
+		// Create a Cloudflare service instance using the global API key method.
+		cfService, err := service.NewCloudflareServiceWithZoneGlobal(zoneID)
+		if err != nil {
+			fmt.Printf("Gagal membuat Cloudflare service untuk user %s: %v\n", user, err)
+			continue
+		}
+
+		// Retrieve the current security level for the zone.
+		currentLevel, err := cfService.GetSecurityLevel()
+		if err != nil {
+			fmt.Printf("Gagal mengambil security level untuk user %s: %v\n", user, err)
+			continue
+		}
+
+		// If CPU usage exceeds the threshold, activate under_attack (if not already active).
 		if usage > cpuThreshold {
-			zoneID, ok := userZoneMapping[user]
-			if !ok || zoneID == "" {
-				fmt.Printf("Mapping Cloudflare zone tidak ditemukan untuk user %s\n", user)
-				continue
-			}
-
-			// Buat instance CloudflareService dengan API token dan zone ID user tersebut.
-			cfService, err := service.NewCloudflareServiceWithZone(apiToken, zoneID)
-			if err != nil {
-				fmt.Printf("Gagal membuat Cloudflare service untuk user %s: %v\n", user, err)
-				continue
-			}
-
-			// Aktifkan mode "under_attack" untuk zone terkait.
-			if err := cfService.UpdateSecurityLevel("on"); err != nil {
-				fmt.Printf("Gagal mengaktifkan under_attack mode untuk user %s: %v\n", user, err)
+			if currentLevel != "under_attack" {
+				if err := cfService.UpdateSecurityLevel("on"); err != nil {
+					fmt.Printf("Gagal mengaktifkan under_attack mode untuk user %s: %v\n", user, err)
+				} else {
+					fmt.Printf("Under_attack mode diaktifkan untuk user %s (zone: %s)\n", user, zoneID)
+					// Kirim notifikasi email jika emailConfig tersedia.
+					if emailConfig != nil {
+						if err := emailConfig.SendNotification(user, zoneID, "on", usage); err != nil {
+							fmt.Printf("Gagal mengirim notifikasi email untuk user %s: %v\n", user, err)
+						}
+					}
+				}
 			} else {
-				fmt.Printf("Under_attack mode diaktifkan untuk user %s (zone: %s)\n", user, zoneID)
+				fmt.Printf("User %s sudah berada di mode under_attack\n", user)
+			}
+		} else {
+			// If CPU usage is below threshold and mode is still under_attack, disable it (set to "high").
+			if currentLevel == "under_attack" {
+				if err := cfService.UpdateSecurityLevel("off"); err != nil {
+					fmt.Printf("Gagal menonaktifkan under_attack mode untuk user %s: %v\n", user, err)
+				} else {
+					fmt.Printf("Under_attack mode dinonaktifkan untuk user %s (zone: %s)\n", user, zoneID)
+					// Kirim notifikasi email jika emailConfig tersedia.
+					if emailConfig != nil {
+						if err := emailConfig.SendNotification(user, zoneID, "off", usage); err != nil {
+							fmt.Printf("Gagal mengirim notifikasi email untuk user %s: %v\n", user, err)
+						}
+					}
+				}
+			} else {
+				fmt.Printf("User %s tidak menggunakan mode under_attack, tidak ada perubahan\n", user)
 			}
 		}
 	}
