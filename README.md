@@ -13,6 +13,9 @@ This project is a Go-based tool that monitors the CPU usage of php-fpm processes
 ### Multi-Zone Support
 - Supports mapping different users to different Cloudflare Zone IDs.
 
+### Email Alert
+- Supports email alert.
+
 ## Requirements
 
 ### Go
@@ -29,8 +32,8 @@ This project is a Go-based tool that monitors the CPU usage of php-fpm processes
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/<your_username>/<repository_name>.git
-cd <repository_name>
+git clone https://github.com/papanlesat/php_fpm_cf_autounderattack.git cf_underattack
+cd cf_underattack
 ```
 
 ### Initialize the Go Module and Download Dependencies
@@ -94,11 +97,12 @@ When executed, the application will:
 ## Folder Structure
 
 ```go
-papanlesat/
+cf_underattack/
 ├── main.go
 └── service/
     ├── cloudflare.go   // Contains Cloudflare API integration logic.
     └── fpm_cpu.go      // Contains the php-fpm CPU monitoring functionality.
+    └── email.go
 ```
 
 ## Contributing
