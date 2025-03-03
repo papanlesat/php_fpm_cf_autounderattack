@@ -55,9 +55,9 @@ func (c *CloudflareService) UpdateSecurityLevel(mode string) error {
 	}
 
 	ctx := context.Background()
-	// Create a zone-level resource container by specifying the Type as "zone" and providing the zone ID.
+	// Create a zone-level resource container by specifying the Type as "zones" and providing the zone ID.
 	rc := &cloudflare.ResourceContainer{
-		Type:       "zone",
+		Type:       "zones",
 		Identifier: c.zoneID,
 	}
 
